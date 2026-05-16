@@ -148,17 +148,6 @@ async def on_message(message):
             await message.channel.send("You need to be in a voice channel to summon me!")
         return
 
-
-    # !leave command
-    if message.content.startswith("!leave"):
-        voice_client = discord.utils.get(client.voice_clients, guild=message.guild)
-        if voice_client and voice_client.is_connected():
-            await voice_client.disconnect()
-            await message.channel.send("Left the voice channel.")
-        else:
-            await message.channel.send("I'm not in a voice channel.")
-        return
-
     # -------------------------
     # AI COMMANDS
     # -------------------------
