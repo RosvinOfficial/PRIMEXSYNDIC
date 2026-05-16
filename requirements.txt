@@ -3,5 +3,4 @@ PyNaCl
 requests
 python-dotenv
 SpeechRecognition
-pyaudio
 gtts
