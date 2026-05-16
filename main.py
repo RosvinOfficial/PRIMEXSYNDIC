@@ -82,7 +82,7 @@ def ask_ai(prompt):
 async def speak_in_vc(voice_client, text):
     """Converts AI text to speech and plays it in the connected VC."""
     
-    # Optional: Clean up markdown (like **bold** or *italics*) so the TTS doesn't read asterisks out loud.
+    # Clean up markdown (like **bold** or *italics*) so the TTS doesn't read asterisks out loud.
     clean_text = re.sub(r'[*_`~]', '', text)
 
     # 1. Generate TTS audio
@@ -126,30 +126,21 @@ async def on_message(message):
         return
 
     # -------------------------
-    # VOICE COMMANDS
+    # UTILITY COMMANDS
     # -------------------------
-    
-        # !summon command
-    if message.content.startswith("!summon"):
-        if message.author.voice:
-            channel = message.author.voice.channel
-            # Check if bot is already in a VC in this server
-            voice_client = discord.utils.get(client.voice_clients, guild=message.guild)
-            
-            if not voice_client:
-                # If not connected anywhere, connect to the user's channel
-                await channel.connect()
-                await message.channel.send(f"✨ Summoned to {channel.name}!")
-            else:
-                # If already connected to another channel, move to the user's channel
-                await voice_client.move_to(channel)
-                await message.channel.send(f"✨ Moved to {channel.name}!")
+
+    # !leave command
+    if message.content.startswith("!leave"):
+        voice_client = discord.utils.get(client.voice_clients, guild=message.guild)
+        if voice_client and voice_client.is_connected():
+            await voice_client.disconnect()
+            await message.channel.send("Left the voice channel.")
         else:
-            await message.channel.send("You need to be in a voice channel to summon me!")
+            await message.channel.send("I'm not in a voice channel.")
         return
 
     # -------------------------
-    # AI COMMANDS
+    # AI COMMANDS (With Auto-Join)
     # -------------------------
 
     # PREFIX COMMAND (!ai)
@@ -172,8 +163,19 @@ async def on_message(message):
             # Send text to channel
             await message.channel.send(ai_response)
 
-            # Speak if connected to a VC
+            # AUTO-JOIN LOGIC
             voice_client = discord.utils.get(client.voice_clients, guild=message.guild)
+            
+            if message.author.voice:
+                channel = message.author.voice.channel
+                # If bot isn't connected anywhere, connect it
+                if not voice_client:
+                    voice_client = await channel.connect()
+                # If bot is in a different channel, move it to yours
+                elif voice_client.channel != channel:
+                    await voice_client.move_to(channel)
+
+            # Speak if connected
             if voice_client and voice_client.is_connected():
                 await speak_in_vc(voice_client, ai_response)
 
@@ -196,8 +198,19 @@ async def on_message(message):
             # Send text to channel
             await message.channel.send(ai_response)
 
-            # Speak if connected to a VC
+            # AUTO-JOIN LOGIC
             voice_client = discord.utils.get(client.voice_clients, guild=message.guild)
+            
+            if message.author.voice:
+                channel = message.author.voice.channel
+                # If bot isn't connected anywhere, connect it
+                if not voice_client:
+                    voice_client = await channel.connect()
+                # If bot is in a different channel, move it to yours
+                elif voice_client.channel != channel:
+                    await voice_client.move_to(channel)
+
+            # Speak if connected
             if voice_client and voice_client.is_connected():
                 await speak_in_vc(voice_client, ai_response)
 
