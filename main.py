@@ -144,7 +144,7 @@ async def on_message(message):
     # JOIN VOICE CHANNEL
     # =================================================
 
-    if message.content == "!join":
+    if message.content == "!primejoin":
 
         if message.author.voice:
 
@@ -166,7 +166,7 @@ async def on_message(message):
     # LEAVE VOICE CHANNEL
     # =================================================
 
-    elif message.content == "!leave":
+    elif message.content == "!primeleave":
 
         if message.guild.voice_client:
 
