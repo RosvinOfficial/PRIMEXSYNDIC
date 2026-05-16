@@ -1,5 +1,7 @@
-discord.py[voice]
+discord.py
+PyNaCl
+SpeechRecognition
+pyaudio
+pyttsx3
 requests
 python-dotenv
-gtts
-PyNaCl
