@@ -121,33 +121,31 @@ async def play_tts(vc, text):
 
     try:
 
-        # Stop previous audio
         if vc.is_playing():
             vc.stop()
 
-        # Create TTS
         tts = gTTS(text=text, lang="en")
 
         filename = "voice.mp3"
 
         tts.save(filename)
 
-        # Play audio
-        vc.play(
-            discord.FFmpegPCMAudio(filename)
+        source = discord.FFmpegPCMAudio(
+            executable="ffmpeg",
+            source=filename
         )
 
-        # Wait until audio finishes
+        vc.play(source)
+
         while vc.is_playing():
             await asyncio.sleep(1)
 
-        # Cleanup
         if os.path.exists(filename):
             os.remove(filename)
 
     except Exception as e:
-        print(f"TTS Error: {e}")
 
+        print(f"TTS ERROR: {e}")
 # ==========================================================
 # READY EVENT
 # ==========================================================
