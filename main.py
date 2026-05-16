@@ -1,79 +1,32 @@
-# ==========================================================
-# DISCORD JARVIS AI VOICE BOT (STABLE VERSION)
-# WORKS ON RAILWAY
-# ==========================================================
-
-# ==========================================================
-# INSTALL PACKAGES
-# ==========================================================
-#
-# pip install discord.py
-# pip install PyNaCl
-# pip install requests
-# pip install python-dotenv
-# pip install gtts
-#
-# ==========================================================
-# requirements.txt
-# ==========================================================
-#
-# discord.py
-# PyNaCl
-# requests
-# python-dotenv
-# gtts
-#
-# ==========================================================
-# Procfile
-# ==========================================================
-#
-# worker: python bot.py
-#
-# ==========================================================
-# nixpacks.toml
-# ==========================================================
-#
-# [phases.setup]
-# nixPkgs = ["python311", "ffmpeg"]
-#
-# ==========================================================
-# ENV VARIABLES
-# ==========================================================
-#
-# DISCORD_BOT_TOKEN=YOUR_DISCORD_TOKEN
-# OPENROUTER_API_KEY=YOUR_OPENROUTER_KEY
-#
-# ==========================================================
-
 import os
-import asyncio
 import discord
 import requests
-from dotenv import load_dotenv
+import asyncio
+import re
 from gtts import gTTS
+from dotenv import load_dotenv
 
-# ==========================================================
-# LOAD ENV
-# ==========================================================
+# =========================
+# LOAD ENV VARIABLES
+# =========================
 
 load_dotenv()
 
 DISCORD_BOT_TOKEN = os.getenv("DISCORD_BOT_TOKEN")
 OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
 
-# ==========================================================
+# =========================
 # DISCORD SETUP
-# ==========================================================
+# =========================
 
 intents = discord.Intents.default()
 intents.message_content = True
-intents.voice_states = True
 
 client = discord.Client(intents=intents)
 
-# ==========================================================
+# =========================
 # AI FUNCTION
-# ==========================================================
+# =========================
 
 def ask_ai(prompt):
 
@@ -81,7 +34,7 @@ def ask_ai(prompt):
         "Authorization": f"Bearer {OPENROUTER_API_KEY}",
         "Content-Type": "application/json",
         "HTTP-Referer": "https://discord.com",
-        "X-Title": "Jarvis Discord Bot"
+        "X-Title": "Discord AI Bot"
     }
 
     payload = {
@@ -90,8 +43,7 @@ def ask_ai(prompt):
             {
                 "role": "system",
                 "content": (
-                    "You are Jarvis, a smart and helpful "
-                    "AI assistant inside Discord."
+                    "You are a smart and friendly Discord AI assistant. Keep responses conversational and relatively concise since they will be spoken out loud."
                 )
             },
             {
@@ -116,68 +68,56 @@ def ask_ai(prompt):
         print(data)
 
         if "choices" not in data:
-            return "AI API Error."
+            return f"API Error:\n{data}"
 
         return data["choices"][0]["message"]["content"]
 
     except Exception as e:
+        return f"Error: {e}"
 
-        print(e)
+# =========================
+# VOICE TTS FUNCTION
+# =========================
 
-        return "Something went wrong."
+async def speak_in_vc(voice_client, text):
+    """Converts AI text to speech and plays it in the connected VC."""
+    
+    # Optional: Clean up markdown (like **bold** or *italics*) so the TTS doesn't read asterisks out loud.
+    clean_text = re.sub(r'[*_`~]', '', text)
 
-# ==========================================================
-# TEXT TO SPEECH FUNCTION
-# ==========================================================
+    # 1. Generate TTS audio
+    tts = gTTS(text=clean_text, lang='en')
+    filename = "temp_ai_response.mp3"
+    tts.save(filename)
 
-async def speak(vc, text):
-
+    # 2. Play audio
     try:
+        source = discord.FFmpegPCMAudio(executable="ffmpeg", source=filename)
+        
+        if not voice_client.is_playing():
+            voice_client.play(source)
 
-        # Stop previous audio
-        if vc.is_playing():
-            vc.stop()
+            # Wait until audio finishes playing before allowing cleanup
+            while voice_client.is_playing():
+                await asyncio.sleep(1)
 
-        # Generate TTS
-        tts = gTTS(text=text, lang="en")
-
-        filename = "voice.mp3"
-
-        tts.save(filename)
-
-        # Create FFmpeg audio source
-        source = discord.FFmpegPCMAudio(
-            executable="ffmpeg",
-            source=filename
-        )
-
-        # Play audio
-        vc.play(source)
-
-        # Wait until speaking ends
-        while vc.is_playing():
-            await asyncio.sleep(1)
-
-        # Delete temp file
-        if os.path.exists(filename):
-            os.remove(filename)
-
+            # 3. Cleanup temp file
+            if os.path.exists(filename):
+                os.remove(filename)
     except Exception as e:
+        print(f"Audio Error: {e}")
 
-        print(f"TTS ERROR: {e}")
-
-# ==========================================================
-# READY EVENT
-# ==========================================================
+# =========================
+# BOT READY
+# =========================
 
 @client.event
 async def on_ready():
-
     print(f"Logged in as {client.user}")
 
-# ==========================================================
+# =========================
 # MESSAGE EVENT
-# ==========================================================
+# =========================
 
 @client.event
 async def on_message(message):
@@ -185,170 +125,90 @@ async def on_message(message):
     if message.author == client.user:
         return
 
-    try:
-
-        # ==================================================
-        # SUMMON BOT
-        # ==================================================
-
-        if message.content == "!summon":
-
-            if not message.author.voice:
-
-                await message.channel.send(
-                    "Join a VC first."
-                )
-
-                return
-
+    # -------------------------
+    # VOICE COMMANDS
+    # -------------------------
+    
+    # !join command
+    if message.content.startswith("!join"):
+        if message.author.voice:
             channel = message.author.voice.channel
-
-            # Move bot if already connected
-            if message.guild.voice_client:
-
-                await message.guild.voice_client.move_to(
-                    channel
-                )
-
-            else:
-
+            # Check if bot is already in a VC in this server
+            voice_client = discord.utils.get(client.voice_clients, guild=message.guild)
+            if not voice_client:
                 await channel.connect()
-
-            await message.channel.send(
-                f"Joined {channel.name}"
-            )
-
-        # ==================================================
-        # DISMISS BOT
-        # ==================================================
-
-        elif message.content == "!dismiss":
-
-            if message.guild.voice_client:
-
-                await message.guild.voice_client.disconnect()
-
-                await message.channel.send(
-                    "Disconnected from VC."
-                )
-
+                await message.channel.send(f"Joined {channel.name}")
             else:
+                await voice_client.move_to(channel)
+        else:
+            await message.channel.send("You need to be in a voice channel first!")
+        return
 
-                await message.channel.send(
-                    "I am not in VC."
-                )
+    # !leave command
+    if message.content.startswith("!leave"):
+        voice_client = discord.utils.get(client.voice_clients, guild=message.guild)
+        if voice_client and voice_client.is_connected():
+            await voice_client.disconnect()
+            await message.channel.send("Left the voice channel.")
+        else:
+            await message.channel.send("I'm not in a voice channel.")
+        return
 
-        # ==================================================
-        # TEXT AI CHAT
-        # ==================================================
+    # -------------------------
+    # AI COMMANDS
+    # -------------------------
 
-        elif message.content.startswith("!ai"):
+    # PREFIX COMMAND (!ai)
+    if message.content.startswith("!ai"):
 
-            prompt = message.content[3:].strip()
+        user_prompt = message.content[3:].strip()
 
-            if not prompt:
+        if not user_prompt:
+            await message.channel.send("Please enter a prompt.")
+            return
 
-                await message.channel.send(
-                    "Please ask something."
-                )
+        async with message.channel.typing():
+            
+            # Fetch AI Response
+            ai_response = ask_ai(user_prompt)
 
-                return
+            if len(ai_response) > 2000:
+                ai_response = ai_response[:1990] + "..."
 
-            async with message.channel.typing():
+            # Send text to channel
+            await message.channel.send(ai_response)
 
-                ai_response = ask_ai(prompt)
+            # Speak if connected to a VC
+            voice_client = discord.utils.get(client.voice_clients, guild=message.guild)
+            if voice_client and voice_client.is_connected():
+                await speak_in_vc(voice_client, ai_response)
 
-                if len(ai_response) > 2000:
-                    ai_response = ai_response[:1990]
+    # MENTION REPLY
+    elif client.user in message.mentions:
 
-                await message.channel.send(
-                    ai_response
-                )
+        user_prompt = message.content.replace(f"<@{client.user.id}>", "").strip()
 
-        # ==================================================
-        # SPEAK CUSTOM TEXT
-        # ==================================================
+        if not user_prompt:
+            user_prompt = "Hello"
 
-        elif message.content.startswith("!speak"):
+        async with message.channel.typing():
 
-            text = message.content[6:].strip()
+            # Fetch AI Response
+            ai_response = ask_ai(user_prompt)
 
-            if not text:
+            if len(ai_response) > 2000:
+                ai_response = ai_response[:1990] + "..."
 
-                await message.channel.send(
-                    "Please provide text."
-                )
+            # Send text to channel
+            await message.channel.send(ai_response)
 
-                return
+            # Speak if connected to a VC
+            voice_client = discord.utils.get(client.voice_clients, guild=message.guild)
+            if voice_client and voice_client.is_connected():
+                await speak_in_vc(voice_client, ai_response)
 
-            vc = message.guild.voice_client
-
-            if vc is None:
-
-                await message.channel.send(
-                    "Use !summon first."
-                )
-
-                return
-
-            await message.channel.send(
-                "Speaking..."
-            )
-
-            await speak(vc, text)
-
-        # ==================================================
-        # JARVIS AI SPEAKING MODE
-        # ==================================================
-
-        elif message.content.startswith("!jarvis"):
-
-            prompt = message.content[7:].strip()
-
-            if not prompt:
-
-                await message.channel.send(
-                    "Ask something."
-                )
-
-                return
-
-            vc = message.guild.voice_client
-
-            if vc is None:
-
-                await message.channel.send(
-                    "Use !summon first."
-                )
-
-                return
-
-            async with message.channel.typing():
-
-                ai_response = ask_ai(prompt)
-
-                # Limit Discord message length
-                if len(ai_response) > 2000:
-                    ai_response = ai_response[:1990]
-
-                # Send text response
-                await message.channel.send(
-                    ai_response
-                )
-
-                # Speak response in VC
-                await speak(vc, ai_response)
-
-    except Exception as e:
-
-        print(f"BOT ERROR: {e}")
-
-        await message.channel.send(
-            "An error occurred."
-        )
-
-# ==========================================================
+# =========================
 # RUN BOT
-# ==========================================================
+# =========================
 
 client.run(DISCORD_BOT_TOKEN)
