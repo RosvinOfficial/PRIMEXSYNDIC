@@ -1,336 +1,67 @@
-# ==========================================================
-# STABLE DISCORD AI + VC BOT
-# TEXT CHAT + VOICE CHANNEL SPEAKING
-# ==========================================================
-
-# ==========================================================
-# INSTALL
-# ==========================================================
-#
-# pip install -U discord.py[voice]
-# pip install requests python-dotenv gtts PyNaCl
-#
-# ==========================================================
-# requirements.txt
-# ==========================================================
-#
-# discord.py[voice]
-# requests
-# python-dotenv
-# gtts
-# PyNaCl
-#
-# ==========================================================
-# Procfile
-# ==========================================================
-#
-# worker: python bot.py
-#
-# ==========================================================
-# ENV VARIABLES
-# ==========================================================
-#
-# DISCORD_BOT_TOKEN=YOUR_TOKEN
-# OPENROUTER_API_KEY=YOUR_KEY
-#
-# ==========================================================
-
-import os
-import discord
-import requests
+import speech_recognition as sr
 import asyncio
-from dotenv import load_dotenv
-from gtts import gTTS
+import edge_tts
+from playsound import playsound
 
-# ==========================================================
-# LOAD ENV
-# ==========================================================
+VOICE = "en-US-GuyNeural"
 
-load_dotenv()
+recognizer = sr.Recognizer()
 
-DISCORD_BOT_TOKEN = os.getenv("DISCORD_BOT_TOKEN")
-OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
+async def speak(text):
 
-# ==========================================================
-# DISCORD SETUP
-# ==========================================================
+    communicate = edge_tts.Communicate(
+        text=text,
+        voice=VOICE
+    )
 
-intents = discord.Intents.default()
-intents.message_content = True
-intents.voice_states = True
+    await communicate.save("voice.mp3")
 
-client = discord.Client(intents=intents)
+    playsound("voice.mp3")
 
-# ==========================================================
-# AI FUNCTION
-# ==========================================================
-
-def ask_ai(prompt):
-
-    headers = {
-        "Authorization": f"Bearer {OPENROUTER_API_KEY}",
-        "Content-Type": "application/json",
-        "HTTP-Referer": "https://discord.com",
-        "X-Title": "Discord Jarvis Bot"
-    }
-
-    payload = {
-        "model": "openrouter/free",
-        "messages": [
-            {
-                "role": "system",
-                "content": (
-                    "You are Jarvis, a smart "
-                    "Discord voice assistant."
-                )
-            },
-            {
-                "role": "user",
-                "content": prompt
-            }
-        ]
-    }
+while True:
 
     try:
 
-        response = requests.post(
-            "https://openrouter.ai/api/v1/chat/completions",
-            headers=headers,
-            json=payload,
-            timeout=60
-        )
+        with sr.Microphone() as source:
 
-        data = response.json()
+            print("Listening...")
 
-        print(data)
+            recognizer.adjust_for_ambient_noise(source)
 
-        if "choices" not in data:
-            return "AI API Error."
+            audio = recognizer.listen(source)
 
-        return data["choices"][0]["message"]["content"]
+            text = recognizer.recognize_google(audio)
+
+            print("You said:", text)
+
+            if "hello" in text.lower():
+
+                asyncio.run(
+                    speak("Hello sir, how can I help you?")
+                )
+
+            elif "time" in text.lower():
+
+                asyncio.run(
+                    speak("I cannot access real time yet.")
+                )
+
+            elif "stop" in text.lower():
+
+                asyncio.run(
+                    speak("Goodbye sir.")
+                )
+
+                break
+
+            else:
+
+                asyncio.run(
+                    speak(
+                        "I heard you say " + text
+                    )
+                )
 
     except Exception as e:
+
         print(e)
-        return "Something went wrong."
-
-# ==========================================================
-# SAFE AUDIO PLAY FUNCTION
-# ==========================================================
-
-async def play_tts(vc, text):
-
-    try:
-
-        if vc.is_playing():
-            vc.stop()
-
-        tts = gTTS(text=text, lang="en")
-
-        filename = "voice.mp3"
-
-        tts.save(filename)
-
-        source = discord.FFmpegPCMAudio(
-            executable="ffmpeg",
-            source=filename
-        )
-
-        vc.play(source)
-
-        while vc.is_playing():
-            await asyncio.sleep(1)
-
-        if os.path.exists(filename):
-            os.remove(filename)
-
-    except Exception as e:
-
-        print(f"TTS ERROR: {e}")
-# ==========================================================
-# READY EVENT
-# ==========================================================
-
-@client.event
-async def on_ready():
-
-    print(f"Logged in as {client.user}")
-
-# ==========================================================
-# MESSAGE EVENT
-# ==========================================================
-
-@client.event
-async def on_message(message):
-
-    if message.author == client.user:
-        return
-
-    try:
-
-        # ==================================================
-        # SUMMON BOT
-        # ==================================================
-
-        if message.content == "!summon":
-
-            if not message.author.voice:
-
-                await message.channel.send(
-                    "Join a VC first."
-                )
-
-                return
-
-            channel = message.author.voice.channel
-
-            # Move if already connected
-            if message.guild.voice_client:
-
-                await message.guild.voice_client.move_to(
-                    channel
-                )
-
-            else:
-
-                await channel.connect()
-
-            await message.channel.send(
-                f"Joined {channel.name}"
-            )
-
-        # ==================================================
-        # DISMISS BOT
-        # ==================================================
-
-        elif message.content == "!dismiss":
-
-            if message.guild.voice_client:
-
-                await message.guild.voice_client.disconnect()
-
-                await message.channel.send(
-                    "Disconnected."
-                )
-
-            else:
-
-                await message.channel.send(
-                    "I am not in VC."
-                )
-
-        # ==================================================
-        # TEXT AI CHAT
-        # ==================================================
-
-        elif message.content.startswith("!ai"):
-
-            prompt = message.content[3:].strip()
-
-            if not prompt:
-
-                await message.channel.send(
-                    "Please ask something."
-                )
-
-                return
-
-            async with message.channel.typing():
-
-                ai_response = ask_ai(prompt)
-
-                if len(ai_response) > 2000:
-                    ai_response = ai_response[:1990]
-
-                await message.channel.send(
-                    ai_response
-                )
-
-        # ==================================================
-        # SPEAK TEXT
-        # ==================================================
-
-        elif message.content.startswith("!speak"):
-
-            text = message.content[6:].strip()
-
-            if not text:
-
-                await message.channel.send(
-                    "Provide text."
-                )
-
-                return
-
-            vc = message.guild.voice_client
-
-            if vc is None:
-
-                await message.channel.send(
-                    "Bot is not in VC."
-                )
-
-                return
-
-            await message.channel.send(
-                "Speaking..."
-            )
-
-            await play_tts(vc, text)
-
-        # ==================================================
-        # JARVIS MODE
-        # ==================================================
-
-        elif message.content.startswith("!jarvis"):
-
-            prompt = message.content[7:].strip()
-
-            if not prompt:
-
-                await message.channel.send(
-                    "Ask something."
-                )
-
-                return
-
-            vc = message.guild.voice_client
-
-            if vc is None:
-
-                await message.channel.send(
-                    "Use !summon first."
-                )
-
-                return
-
-            async with message.channel.typing():
-
-                ai_response = ask_ai(prompt)
-
-                if len(ai_response) > 2000:
-                    ai_response = ai_response[:1990]
-
-                # Send text
-                await message.channel.send(
-                    ai_response
-                )
-
-                # Speak
-                await play_tts(
-                    vc,
-                    ai_response
-                )
-
-    except Exception as e:
-
-        print(f"BOT ERROR: {e}")
-
-        await message.channel.send(
-            "An error occurred."
-        )
-
-# ==========================================================
-# RUN BOT
-# ==========================================================
-
-client.run(DISCORD_BOT_TOKEN)
