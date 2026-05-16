@@ -1,15 +1,41 @@
-# ================================
-# Discord AI Bot using Grok API
-# ================================
-# Install:
+# =========================================
+# Discord AI Bot (FREE AI API)
+# Using OpenRouter + DeepSeek
+# =========================================
+
+# Install packages:
 # pip install discord.py requests python-dotenv
+
+# =========================================
+# FILES NEEDED
+# =========================================
 #
-# Create a .env file:
-# DISCORD_BOT_TOKEN=YOUR_DISCORD_BOT_TOKEN
-# GROK_API_KEY=YOUR_GROK_API_KEY
+# bot.py
+# requirements.txt
+# Procfile
 #
-# Run:
-# python bot.py
+# =========================================
+# requirements.txt
+# =========================================
+#
+# discord.py
+# requests
+# python-dotenv
+#
+# =========================================
+# Procfile
+# =========================================
+#
+# worker: python bot.py
+#
+# =========================================
+# Railway Environment Variables
+# =========================================
+#
+# DISCORD_BOT_TOKEN=your_discord_bot_token
+# OPENROUTER_API_KEY=your_openrouter_api_key
+#
+# =========================================
 
 import os
 import discord
@@ -19,23 +45,23 @@ from dotenv import load_dotenv
 # Load environment variables
 load_dotenv()
 
-DISCORD_TOKEN = os.getenv("DISCORD_BOT_TOKEN")
-GROK_API_KEY = os.getenv("GROK_API_KEY")
+DISCORD_BOT_TOKEN = os.getenv("DISCORD_BOT_TOKEN")
+OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
 
-# Discord bot setup
+# Discord Intents
 intents = discord.Intents.default()
 intents.message_content = True
 
 client = discord.Client(intents=intents)
 
-# Grok API endpoint
-GROK_API_URL = "https://api.x.ai/v1/chat/completions"
+# =========================================
+# AI Function
+# =========================================
 
-# Function to get AI response
 def ask_ai(prompt):
 
     headers = {
-        "Authorization": f"Bearer {GROK_API_KEY}",
+        "Authorization": f"Bearer {OPENROUTER_API_KEY}",
         "Content-Type": "application/json"
     }
 
@@ -44,13 +70,17 @@ def ask_ai(prompt):
         "messages": [
             {
                 "role": "system",
-                "content": "You are a smart Discord AI assistant."
+                "content": (
+                    "You are a smart, friendly and helpful "
+                    "Discord AI assistant."
+                )
             },
             {
                 "role": "user",
                 "content": prompt
             }
-        ]
+        ],
+        "temperature": 0.7
     }
 
     try:
@@ -63,20 +93,29 @@ def ask_ai(prompt):
 
         data = response.json()
 
+        print(data)
+
+        # Error handling
         if "choices" not in data:
-            return f"API Error: {data}"
+            return f"API Error:\n{data}"
 
         return data["choices"][0]["message"]["content"]
 
     except Exception as e:
         return f"Error: {e}"
 
-# Bot ready event
+# =========================================
+# Bot Ready Event
+# =========================================
+
 @client.event
 async def on_ready():
     print(f"Logged in as {client.user}")
 
-# Message event
+# =========================================
+# Message Event
+# =========================================
+
 @client.event
 async def on_message(message):
 
@@ -84,25 +123,59 @@ async def on_message(message):
     if message.author == client.user:
         return
 
-    # Command prefix
+    # =====================================
+    # PREFIX COMMAND
+    # Example:
+    # !ai hello
+    # =====================================
+
     if message.content.startswith("!ai"):
 
         user_prompt = message.content[3:].strip()
 
         if not user_prompt:
-            await message.channel.send("Please enter a prompt.")
+            await message.channel.send(
+                "Please enter a prompt."
+            )
             return
 
-        # Typing indicator
         async with message.channel.typing():
 
-            ai_response = ask_grok(user_prompt)
+            ai_response = ask_ai(user_prompt)
 
-            # Discord message limit protection
+            # Discord message length limit
             if len(ai_response) > 2000:
                 ai_response = ai_response[:1990] + "..."
 
             await message.channel.send(ai_response)
 
-# Run bot
-client.run(DISCORD_TOKEN)
+    # =====================================
+    # BOT MENTION REPLY
+    # Example:
+    # @BotName hello
+    # =====================================
+
+    elif client.user in message.mentions:
+
+        user_prompt = message.content.replace(
+            f"<@{client.user.id}>",
+            ""
+        ).strip()
+
+        if not user_prompt:
+            user_prompt = "Hello"
+
+        async with message.channel.typing():
+
+            ai_response = ask_ai(user_prompt)
+
+            if len(ai_response) > 2000:
+                ai_response = ai_response[:1990] + "..."
+
+            await message.channel.send(ai_response)
+
+# =========================================
+# Run Bot
+# =========================================
+
+client.run(DISCORD_BOT_TOKEN)
