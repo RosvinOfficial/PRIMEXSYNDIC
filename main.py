@@ -1,25 +1,25 @@
 import os
 import re
+import time
 import asyncio
 import requests
-import urllib.parse
 import discord
 
 from gtts import gTTS
 from dotenv import load_dotenv
 
-# =========================
+# ==========================================
 # LOAD ENV
-# =========================
+# ==========================================
 
 load_dotenv()
 
 DISCORD_BOT_TOKEN = os.getenv("DISCORD_BOT_TOKEN")
 OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
 
-# =========================
+# ==========================================
 # DISCORD SETUP
-# =========================
+# ==========================================
 
 intents = discord.Intents.default()
 intents.message_content = True
@@ -27,9 +27,9 @@ intents.voice_states = True
 
 client = discord.Client(intents=intents)
 
-# =========================
+# ==========================================
 # AI CHAT FUNCTION
-# =========================
+# ==========================================
 
 def ask_ai(prompt):
 
@@ -46,8 +46,9 @@ def ask_ai(prompt):
             {
                 "role": "system",
                 "content": (
-                    "You are a smart, friendly, funny, and helpful Discord AI assistant. "
-                    "Keep replies conversational and not too long because they will be spoken in voice chat."
+                    "You are a smart, funny, friendly AI Discord assistant. "
+                    "Keep responses conversational and not too long because "
+                    "they will also be spoken in voice chat."
                 )
             },
             {
@@ -79,54 +80,125 @@ def ask_ai(prompt):
     except Exception as e:
         return f"Error: {e}"
 
-# =========================
-# FREE IMAGE GENERATION
-# =========================
+# ==========================================
+# Z-IMAGE-TURBO IMAGE GENERATOR
+# ==========================================
 
 def generate_image(prompt):
 
     try:
 
-        encoded_prompt = urllib.parse.quote(prompt)
-
-        image_url = (
-            f"https://image.pollinations.ai/prompt/"
-            f"{encoded_prompt}"
-            f"?width=1024"
-            f"&height=1024"
-            f"&model=flux"
+        api_url = (
+            "https://mrfakename-z-image-turbo.hf.space/"
+            "gradio_api/call/infer"
         )
 
-        return image_url
+        payload = {
+            "data": [
+                prompt,     # Prompt
+                "",         # Negative Prompt
+                1024,       # Width
+                1024,       # Height
+                8,          # Steps
+                0.0         # CFG Scale
+            ]
+        }
+
+        # Start generation
+        response = requests.post(
+            api_url,
+            json=payload,
+            timeout=60
+        )
+
+        data = response.json()
+
+        print(data)
+
+        event_id = data["event_id"]
+
+        result_url = (
+            f"https://mrfakename-z-image-turbo.hf.space/"
+            f"gradio_api/call/infer/{event_id}"
+        )
+
+        # Poll until completed
+        while True:
+
+            result = requests.get(
+                result_url,
+                timeout=60
+            )
+
+            if result.status_code == 200:
+
+                text = result.text
+
+                print(text)
+
+                # Extract image path
+                match = re.search(
+                    r'"url":"(.*?)"',
+                    text
+                )
+
+                if match:
+
+                    image_path = (
+                        match.group(1)
+                        .replace("\\/", "/")
+                    )
+
+                    full_url = (
+                        "https://mrfakename-z-image-turbo.hf.space"
+                        + image_path
+                    )
+
+                    return full_url
+
+            time.sleep(1)
 
     except Exception as e:
-        return f"Error: {e}"
 
-# =========================
+        print(f"Image Error: {e}")
+
+        return None
+
+# ==========================================
 # TTS FUNCTION
-# =========================
+# ==========================================
 
 async def speak_in_vc(voice_client, text):
 
     try:
 
-        # Clean markdown symbols
-        clean_text = re.sub(r'[*_`~]', '', text)
+        # Remove markdown symbols
+        clean_text = re.sub(
+            r'[*_`~]',
+            '',
+            text
+        )
 
-        # Limit very long speech
+        # Limit speech length
         clean_text = clean_text[:500]
 
-        filename = f"temp_{voice_client.guild.id}.mp3"
+        filename = (
+            f"temp_{voice_client.guild.id}.mp3"
+        )
 
         # Generate TTS
-        tts = gTTS(text=clean_text, lang='en')
+        tts = gTTS(
+            text=clean_text,
+            lang='en'
+        )
+
         tts.save(filename)
 
-        # Stop old audio if playing
+        # Stop current audio
         if voice_client.is_playing():
             voice_client.stop()
 
-        # FFmpeg audio source
+        # Play audio
         source = discord.FFmpegPCMAudio(
             executable="ffmpeg",
             source=filename
@@ -134,37 +206,38 @@ async def speak_in_vc(voice_client, text):
 
         voice_client.play(source)
 
-        # Wait until audio finishes
         while voice_client.is_playing():
             await asyncio.sleep(1)
 
-        # Small delay
         await asyncio.sleep(1)
 
         # Cleanup
         try:
+
             if os.path.exists(filename):
                 os.remove(filename)
+
         except:
             pass
 
     except Exception as e:
+
         print(f"TTS Error: {e}")
 
-# =========================
+# ==========================================
 # READY EVENT
-# =========================
+# ==========================================
 
 @client.event
 async def on_ready():
 
     print("=" * 50)
-    print(f"✅ Logged in as: {client.user}")
+    print(f"✅ Logged in as {client.user}")
     print("=" * 50)
 
-# =========================
+# ==========================================
 # MESSAGE EVENT
-# =========================
+# ==========================================
 
 @client.event
 async def on_message(message):
@@ -172,36 +245,9 @@ async def on_message(message):
     if message.author == client.user:
         return
 
-    # ====================================
-    # !leave COMMAND
-    # ====================================
-
-    if message.content.startswith("!leave"):
-
-        voice_client = discord.utils.get(
-            client.voice_clients,
-            guild=message.guild
-        )
-
-        if voice_client and voice_client.is_connected():
-
-            await voice_client.disconnect()
-
-            await message.channel.send(
-                "👋 Left the voice channel."
-            )
-
-        else:
-
-            await message.channel.send(
-                "❌ I'm not in a voice channel."
-            )
-
-        return
-
-    # ====================================
-    # !join COMMAND
-    # ====================================
+    # ======================================
+    # !join
+    # ======================================
 
     if message.content.startswith("!join"):
 
@@ -229,14 +275,41 @@ async def on_message(message):
             await channel.connect()
 
         await message.channel.send(
-            f"✅ Joined **{channel}**"
+            f"✅ Joined {channel}"
         )
 
         return
 
-    # ====================================
-    # !image COMMAND
-    # ====================================
+    # ======================================
+    # !leave
+    # ======================================
+
+    if message.content.startswith("!leave"):
+
+        voice_client = discord.utils.get(
+            client.voice_clients,
+            guild=message.guild
+        )
+
+        if voice_client and voice_client.is_connected():
+
+            await voice_client.disconnect()
+
+            await message.channel.send(
+                "👋 Left the voice channel."
+            )
+
+        else:
+
+            await message.channel.send(
+                "❌ I'm not in a VC."
+            )
+
+        return
+
+    # ======================================
+    # !image
+    # ======================================
 
     if message.content.startswith("!image"):
 
@@ -245,17 +318,29 @@ async def on_message(message):
         if not prompt:
 
             await message.channel.send(
-                "❌ Please provide an image prompt."
+                "❌ Please enter an image prompt."
             )
 
             return
 
-        async with message.channel.typing():
+        loading = await message.channel.send(
+            "🎨 Generating image..."
+        )
+
+        try:
 
             image_url = generate_image(prompt)
 
+            if not image_url:
+
+                await loading.edit(
+                    content="❌ Failed to generate image."
+                )
+
+                return
+
             embed = discord.Embed(
-                title="🎨 AI Generated Image",
+                title="⚡ Z-Image-Turbo",
                 description=f"**Prompt:** {prompt}",
                 color=0x00ffcc
             )
@@ -263,16 +348,26 @@ async def on_message(message):
             embed.set_image(url=image_url)
 
             embed.set_footer(
-                text="Generated using Pollinations AI"
+                text="Powered by HuggingFace"
             )
 
-            await message.channel.send(embed=embed)
+            await loading.delete()
+
+            await message.channel.send(
+                embed=embed
+            )
+
+        except Exception as e:
+
+            await loading.edit(
+                content=f"❌ Error: {e}"
+            )
 
         return
 
-    # ====================================
-    # !ai COMMAND
-    # ====================================
+    # ======================================
+    # !ai
+    # ======================================
 
     if message.content.startswith("!ai"):
 
@@ -288,20 +383,17 @@ async def on_message(message):
 
         async with message.channel.typing():
 
-            # Get AI response
             ai_response = ask_ai(prompt)
 
-            # Limit Discord text size
+            # Limit Discord size
             if len(ai_response) > 1900:
                 ai_response = ai_response[:1900] + "..."
 
-            # Send response
-            await message.channel.send(ai_response)
+            await message.channel.send(
+                ai_response
+            )
 
-            # =========================
-            # AUTO JOIN VC
-            # =========================
-
+            # Voice auto join
             voice_client = discord.utils.get(
                 client.voice_clients,
                 guild=message.guild
@@ -309,20 +401,27 @@ async def on_message(message):
 
             if message.author.voice:
 
-                channel = message.author.voice.channel
+                channel = (
+                    message.author.voice.channel
+                )
 
-                # Connect if not connected
                 if not voice_client:
 
-                    voice_client = await channel.connect()
+                    voice_client = (
+                        await channel.connect()
+                    )
 
-                # Move if different VC
                 elif voice_client.channel != channel:
 
-                    await voice_client.move_to(channel)
+                    await voice_client.move_to(
+                        channel
+                    )
 
-            # Speak response
-            if voice_client and voice_client.is_connected():
+            # Speak
+            if (
+                voice_client
+                and voice_client.is_connected()
+            ):
 
                 await speak_in_vc(
                     voice_client,
@@ -331,9 +430,9 @@ async def on_message(message):
 
         return
 
-    # ====================================
+    # ======================================
     # BOT MENTION REPLY
-    # ====================================
+    # ======================================
 
     if client.user in message.mentions:
 
@@ -352,9 +451,10 @@ async def on_message(message):
             if len(ai_response) > 1900:
                 ai_response = ai_response[:1900] + "..."
 
-            await message.channel.send(ai_response)
+            await message.channel.send(
+                ai_response
+            )
 
-            # Voice logic
             voice_client = discord.utils.get(
                 client.voice_clients,
                 guild=message.guild
@@ -362,25 +462,34 @@ async def on_message(message):
 
             if message.author.voice:
 
-                channel = message.author.voice.channel
+                channel = (
+                    message.author.voice.channel
+                )
 
                 if not voice_client:
 
-                    voice_client = await channel.connect()
+                    voice_client = (
+                        await channel.connect()
+                    )
 
                 elif voice_client.channel != channel:
 
-                    await voice_client.move_to(channel)
+                    await voice_client.move_to(
+                        channel
+                    )
 
-            if voice_client and voice_client.is_connected():
+            if (
+                voice_client
+                and voice_client.is_connected()
+            ):
 
                 await speak_in_vc(
                     voice_client,
                     ai_response
                 )
 
-# =========================
+# ==========================================
 # START BOT
-# =========================
+# ==========================================
 
 client.run(DISCORD_BOT_TOKEN)
