@@ -66,27 +66,25 @@ def ask_ai(prompt):
     }
 
     payload = {
-        "model": "deepseek/deepseek-chat-v3-0324:free",
+        "model": "meta-llama/llama-3-8b-instruct:free",
         "messages": [
             {
                 "role": "system",
                 "content": (
-                    "You are a smart, friendly and helpful "
-                    "Discord AI assistant."
+                    "You are a smart Discord AI assistant."
                 )
             },
             {
                 "role": "user",
                 "content": prompt
             }
-        ],
-        "temperature": 0.7
+        ]
     }
 
     try:
 
         response = requests.post(
-            url="https://openrouter.ai/api/v1/chat/completions",
+            "https://openrouter.ai/api/v1/chat/completions",
             headers=headers,
             json=payload
         )
@@ -95,9 +93,8 @@ def ask_ai(prompt):
 
         print(data)
 
-        # Error handling
         if "choices" not in data:
-            return f"API Error:\n{data}"
+            return f"API Error: {data}"
 
         return data["choices"][0]["message"]["content"]
 
