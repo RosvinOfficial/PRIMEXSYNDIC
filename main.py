@@ -144,38 +144,70 @@ async def on_message(message):
     # JOIN VOICE CHANNEL
     # =================================================
 
-    if message.content == "!primejoin":
+# =================================================
+# SUMMON BOT TO VOICE CHANNEL
+# Command:
+# !summon
+# =================================================
 
-        if message.author.voice:
+if message.content == "!summon":
 
-            channel = message.author.voice.channel
+    # Check if user is in VC
+    if not message.author.voice:
 
-            await channel.connect()
+        await message.channel.send(
+            "You must join a voice channel first."
+        )
 
-            await message.channel.send(
-                "Joined voice channel."
-            )
+        return
 
-        else:
+    channel = message.author.voice.channel
 
-            await message.channel.send(
-                "Join a voice channel first."
-            )
+    # If bot already connected
+    if message.guild.voice_client:
+
+        await message.guild.voice_client.move_to(
+            channel
+        )
+
+        await message.channel.send(
+            f"Moved to {channel.name}"
+        )
+
+    else:
+
+        # Connect bot
+        await channel.connect()
+
+        await message.channel.send(
+            f"Joined {channel.name}"
+        )
 
     # =================================================
     # LEAVE VOICE CHANNEL
     # =================================================
 
-    elif message.content == "!primeleave":
+    # =================================================
+# LEAVE VC
+# Command:
+# !dismiss
+# =================================================
 
-        if message.guild.voice_client:
+elif message.content == "!dismiss":
 
-            await message.guild.voice_client.disconnect()
+    if message.guild.voice_client:
 
-            await message.channel.send(
-                "Disconnected from VC."
-            )
+        await message.guild.voice_client.disconnect()
 
+        await message.channel.send(
+            "Disconnected from VC."
+        )
+
+    else:
+
+        await message.channel.send(
+            "I am not in any VC."
+        )
     # =================================================
     # TEXT AI CHAT
     # =================================================
