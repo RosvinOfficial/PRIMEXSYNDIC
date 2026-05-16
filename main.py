@@ -176,7 +176,7 @@ async def on_message(message):
     # !leave COMMAND
     # ====================================
 
-    if message.content.startswith("!leave"):
+    if message.content.startswith("/leave"):
 
         voice_client = discord.utils.get(
             client.voice_clients,
@@ -203,7 +203,7 @@ async def on_message(message):
     # !join COMMAND
     # ====================================
 
-    if message.content.startswith("!join"):
+    if message.content.startswith("/join"):
 
         if not message.author.voice:
 
@@ -238,7 +238,7 @@ async def on_message(message):
     # !image COMMAND
     # ====================================
 
-    if message.content.startswith("!image"):
+    if message.content.startswith("/image"):
 
         prompt = message.content[6:].strip()
 
@@ -274,7 +274,7 @@ async def on_message(message):
     # !ai COMMAND
     # ====================================
 
-    if message.content.startswith("!ai"):
+    if message.content.startswith("/ai"):
 
         prompt = message.content[3:].strip()
 
