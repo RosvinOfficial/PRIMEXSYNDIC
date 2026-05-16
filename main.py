@@ -32,7 +32,7 @@ client = discord.Client(intents=intents)
 GROK_API_URL = "https://api.x.ai/v1/chat/completions"
 
 # Function to get AI response
-def ask_grok(prompt):
+def ask_ai(prompt):
 
     headers = {
         "Authorization": f"Bearer {GROK_API_KEY}",
@@ -40,6 +40,7 @@ def ask_grok(prompt):
     }
 
     payload = {
+        "model": "deepseek/deepseek-chat-v3-0324:free",
         "messages": [
             {
                 "role": "system",
@@ -49,23 +50,18 @@ def ask_grok(prompt):
                 "role": "user",
                 "content": prompt
             }
-        ],
-        "model": "grok-3-latest",
-        "stream": False,
-        "temperature": 0.7
+        ]
     }
 
     try:
 
         response = requests.post(
-            "https://api.x.ai/v1/chat/completions",
+            url="https://openrouter.ai/api/v1/chat/completions",
             headers=headers,
             json=payload
         )
 
         data = response.json()
-
-        print(data)
 
         if "choices" not in data:
             return f"API Error: {data}"
