@@ -129,20 +129,25 @@ async def on_message(message):
     # VOICE COMMANDS
     # -------------------------
     
-    # !join command
-    if message.content.startswith("!join"):
+        # !summon command
+    if message.content.startswith("!summon"):
         if message.author.voice:
             channel = message.author.voice.channel
             # Check if bot is already in a VC in this server
             voice_client = discord.utils.get(client.voice_clients, guild=message.guild)
+            
             if not voice_client:
+                # If not connected anywhere, connect to the user's channel
                 await channel.connect()
-                await message.channel.send(f"Joined {channel.name}")
+                await message.channel.send(f"✨ Summoned to {channel.name}!")
             else:
+                # If already connected to another channel, move to the user's channel
                 await voice_client.move_to(channel)
+                await message.channel.send(f"✨ Moved to {channel.name}!")
         else:
-            await message.channel.send("You need to be in a voice channel first!")
+            await message.channel.send("You need to be in a voice channel to summon me!")
         return
+
 
     # !leave command
     if message.content.startswith("!leave"):
