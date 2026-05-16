@@ -1,13 +1,15 @@
 import os
-import discord
-import requests
-import asyncio
 import re
+import asyncio
+import requests
+import urllib.parse
+import discord
+
 from gtts import gTTS
 from dotenv import load_dotenv
 
 # =========================
-# LOAD ENV VARIABLES
+# LOAD ENV
 # =========================
 
 load_dotenv()
@@ -21,11 +23,12 @@ OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
 
 intents = discord.Intents.default()
 intents.message_content = True
+intents.voice_states = True
 
 client = discord.Client(intents=intents)
 
 # =========================
-# AI FUNCTION
+# AI CHAT FUNCTION
 # =========================
 
 def ask_ai(prompt):
@@ -34,16 +37,17 @@ def ask_ai(prompt):
         "Authorization": f"Bearer {OPENROUTER_API_KEY}",
         "Content-Type": "application/json",
         "HTTP-Referer": "https://discord.com",
-        "X-Title": "Discord AI Bot"
+        "X-Title": "Discord AI Assistant"
     }
 
     payload = {
-        "model": "openrouter/free",
+        "model": "deepseek/deepseek-chat-v3-0324:free",
         "messages": [
             {
                 "role": "system",
                 "content": (
-                    "You are a smart and friendly Discord AI assistant. Keep responses conversational and relatively concise since they will be spoken out loud."
+                    "You are a smart, friendly, funny, and helpful Discord AI assistant. "
+                    "Keep replies conversational and not too long because they will be spoken in voice chat."
                 )
             },
             {
@@ -76,44 +80,87 @@ def ask_ai(prompt):
         return f"Error: {e}"
 
 # =========================
-# VOICE TTS FUNCTION
+# FREE IMAGE GENERATION
+# =========================
+
+def generate_image(prompt):
+
+    try:
+
+        encoded_prompt = urllib.parse.quote(prompt)
+
+        image_url = (
+            f"https://image.pollinations.ai/prompt/"
+            f"{encoded_prompt}"
+            f"?width=1024"
+            f"&height=1024"
+            f"&model=flux"
+        )
+
+        return image_url
+
+    except Exception as e:
+        return f"Error: {e}"
+
+# =========================
+# TTS FUNCTION
 # =========================
 
 async def speak_in_vc(voice_client, text):
-    """Converts AI text to speech and plays it in the connected VC."""
-    
-    # Clean up markdown (like **bold** or *italics*) so the TTS doesn't read asterisks out loud.
-    clean_text = re.sub(r'[*_`~]', '', text)
 
-    # 1. Generate TTS audio
-    tts = gTTS(text=clean_text, lang='en')
-    filename = "temp_ai_response.mp3"
-    tts.save(filename)
-
-    # 2. Play audio
     try:
-        source = discord.FFmpegPCMAudio(executable="ffmpeg", source=filename)
-        
-        if not voice_client.is_playing():
-            voice_client.play(source)
 
-            # Wait until audio finishes playing before allowing cleanup
-            while voice_client.is_playing():
-                await asyncio.sleep(1)
+        # Clean markdown symbols
+        clean_text = re.sub(r'[*_`~]', '', text)
 
-            # 3. Cleanup temp file
+        # Limit very long speech
+        clean_text = clean_text[:500]
+
+        filename = f"temp_{voice_client.guild.id}.mp3"
+
+        # Generate TTS
+        tts = gTTS(text=clean_text, lang='en')
+        tts.save(filename)
+
+        # Stop old audio if playing
+        if voice_client.is_playing():
+            voice_client.stop()
+
+        # FFmpeg audio source
+        source = discord.FFmpegPCMAudio(
+            executable="ffmpeg",
+            source=filename
+        )
+
+        voice_client.play(source)
+
+        # Wait until audio finishes
+        while voice_client.is_playing():
+            await asyncio.sleep(1)
+
+        # Small delay
+        await asyncio.sleep(1)
+
+        # Cleanup
+        try:
             if os.path.exists(filename):
                 os.remove(filename)
+        except:
+            pass
+
     except Exception as e:
-        print(f"Audio Error: {e}")
+        print(f"TTS Error: {e}")
 
 # =========================
-# BOT READY
+# READY EVENT
 # =========================
 
 @client.event
 async def on_ready():
-    print(f"Logged in as {client.user}")
+
+    print("=" * 50)
+    print(f"✅ Logged in as: {client.user}")
+    print("=" * 50)
 
 # =========================
 # MESSAGE EVENT
@@ -125,97 +172,215 @@ async def on_message(message):
     if message.author == client.user:
         return
 
-    # -------------------------
-    # UTILITY COMMANDS
-    # -------------------------
+    # ====================================
+    # !leave COMMAND
+    # ====================================
 
-    # !leave command
     if message.content.startswith("!leave"):
-        voice_client = discord.utils.get(client.voice_clients, guild=message.guild)
+
+        voice_client = discord.utils.get(
+            client.voice_clients,
+            guild=message.guild
+        )
+
         if voice_client and voice_client.is_connected():
+
             await voice_client.disconnect()
-            await message.channel.send("Left the voice channel.")
+
+            await message.channel.send(
+                "👋 Left the voice channel."
+            )
+
         else:
-            await message.channel.send("I'm not in a voice channel.")
+
+            await message.channel.send(
+                "❌ I'm not in a voice channel."
+            )
+
         return
 
-    # -------------------------
-    # AI COMMANDS (With Auto-Join)
-    # -------------------------
+    # ====================================
+    # !join COMMAND
+    # ====================================
 
-    # PREFIX COMMAND (!ai)
-    if message.content.startswith("!ai"):
+    if message.content.startswith("!join"):
 
-        user_prompt = message.content[3:].strip()
+        if not message.author.voice:
 
-        if not user_prompt:
-            await message.channel.send("Please enter a prompt.")
+            await message.channel.send(
+                "❌ Join a voice channel first."
+            )
+
+            return
+
+        channel = message.author.voice.channel
+
+        voice_client = discord.utils.get(
+            client.voice_clients,
+            guild=message.guild
+        )
+
+        if voice_client:
+
+            await voice_client.move_to(channel)
+
+        else:
+
+            await channel.connect()
+
+        await message.channel.send(
+            f"✅ Joined **{channel}**"
+        )
+
+        return
+
+    # ====================================
+    # !image COMMAND
+    # ====================================
+
+    if message.content.startswith("!image"):
+
+        prompt = message.content[6:].strip()
+
+        if not prompt:
+
+            await message.channel.send(
+                "❌ Please provide an image prompt."
+            )
+
             return
 
         async with message.channel.typing():
-            
-            # Fetch AI Response
-            ai_response = ask_ai(user_prompt)
 
-            if len(ai_response) > 2000:
-                ai_response = ai_response[:1990] + "..."
+            image_url = generate_image(prompt)
 
-            # Send text to channel
-            await message.channel.send(ai_response)
+            embed = discord.Embed(
+                title="🎨 AI Generated Image",
+                description=f"**Prompt:** {prompt}",
+                color=0x00ffcc
+            )
 
-            # AUTO-JOIN LOGIC
-            voice_client = discord.utils.get(client.voice_clients, guild=message.guild)
-            
-            if message.author.voice:
-                channel = message.author.voice.channel
-                # If bot isn't connected anywhere, connect it
-                if not voice_client:
-                    voice_client = await channel.connect()
-                # If bot is in a different channel, move it to yours
-                elif voice_client.channel != channel:
-                    await voice_client.move_to(channel)
+            embed.set_image(url=image_url)
 
-            # Speak if connected
-            if voice_client and voice_client.is_connected():
-                await speak_in_vc(voice_client, ai_response)
+            embed.set_footer(
+                text="Generated using Pollinations AI"
+            )
 
-    # MENTION REPLY
-    elif client.user in message.mentions:
+            await message.channel.send(embed=embed)
 
-        user_prompt = message.content.replace(f"<@{client.user.id}>", "").strip()
+        return
 
-        if not user_prompt:
-            user_prompt = "Hello"
+    # ====================================
+    # !ai COMMAND
+    # ====================================
+
+    if message.content.startswith("!ai"):
+
+        prompt = message.content[3:].strip()
+
+        if not prompt:
+
+            await message.channel.send(
+                "❌ Please enter a prompt."
+            )
+
+            return
 
         async with message.channel.typing():
 
-            # Fetch AI Response
-            ai_response = ask_ai(user_prompt)
+            # Get AI response
+            ai_response = ask_ai(prompt)
 
-            if len(ai_response) > 2000:
-                ai_response = ai_response[:1990] + "..."
+            # Limit Discord text size
+            if len(ai_response) > 1900:
+                ai_response = ai_response[:1900] + "..."
 
-            # Send text to channel
+            # Send response
             await message.channel.send(ai_response)
 
-            # AUTO-JOIN LOGIC
-            voice_client = discord.utils.get(client.voice_clients, guild=message.guild)
-            
+            # =========================
+            # AUTO JOIN VC
+            # =========================
+
+            voice_client = discord.utils.get(
+                client.voice_clients,
+                guild=message.guild
+            )
+
             if message.author.voice:
+
                 channel = message.author.voice.channel
-                # If bot isn't connected anywhere, connect it
+
+                # Connect if not connected
                 if not voice_client:
+
                     voice_client = await channel.connect()
-                # If bot is in a different channel, move it to yours
+
+                # Move if different VC
                 elif voice_client.channel != channel:
+
                     await voice_client.move_to(channel)
 
-            # Speak if connected
+            # Speak response
             if voice_client and voice_client.is_connected():
-                await speak_in_vc(voice_client, ai_response)
+
+                await speak_in_vc(
+                    voice_client,
+                    ai_response
+                )
+
+        return
+
+    # ====================================
+    # BOT MENTION REPLY
+    # ====================================
+
+    if client.user in message.mentions:
+
+        prompt = message.content.replace(
+            f"<@{client.user.id}>",
+            ""
+        ).strip()
+
+        if not prompt:
+            prompt = "Hello"
+
+        async with message.channel.typing():
+
+            ai_response = ask_ai(prompt)
+
+            if len(ai_response) > 1900:
+                ai_response = ai_response[:1900] + "..."
+
+            await message.channel.send(ai_response)
+
+            # Voice logic
+            voice_client = discord.utils.get(
+                client.voice_clients,
+                guild=message.guild
+            )
+
+            if message.author.voice:
+
+                channel = message.author.voice.channel
+
+                if not voice_client:
+
+                    voice_client = await channel.connect()
+
+                elif voice_client.channel != channel:
+
+                    await voice_client.move_to(channel)
+
+            if voice_client and voice_client.is_connected():
+
+                await speak_in_vc(
+                    voice_client,
+                    ai_response
+                )
 
 # =========================
-# RUN BOT
+# START BOT
 # =========================
 
 client.run(DISCORD_BOT_TOKEN)
