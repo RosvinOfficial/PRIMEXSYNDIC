@@ -1,84 +1,54 @@
-# =========================================
-# Discord AI Bot (FREE AI API)
-# Using OpenRouter + DeepSeek
-# =========================================
-
-# Install packages:
-# pip install discord.py requests python-dotenv
-
-# =========================================
-# FILES NEEDED
-# =========================================
-#
-# bot.py
-# requirements.txt
-# Procfile
-#
-# =========================================
-# requirements.txt
-# =========================================
-#
-# discord.py
-# requests
-# python-dotenv
-#
-# =========================================
-# Procfile
-# =========================================
-#
-# worker: python bot.py
-#
-# =========================================
-# Railway Environment Variables
-# =========================================
-#
-# DISCORD_BOT_TOKEN=your_discord_bot_token
-# OPENROUTER_API_KEY=your_openrouter_api_key
-#
-# =========================================
-
 import os
 import discord
 import requests
 from dotenv import load_dotenv
 
-# Load environment variables
+# =========================
+# LOAD ENV VARIABLES
+# =========================
+
 load_dotenv()
 
 DISCORD_BOT_TOKEN = os.getenv("DISCORD_BOT_TOKEN")
 OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
 
-# Discord Intents
+# =========================
+# DISCORD SETUP
+# =========================
+
 intents = discord.Intents.default()
 intents.message_content = True
 
 client = discord.Client(intents=intents)
 
-# =========================================
-# AI Function
-# =========================================
+# =========================
+# AI FUNCTION
+# =========================
 
 def ask_ai(prompt):
 
     headers = {
         "Authorization": f"Bearer {OPENROUTER_API_KEY}",
-        "Content-Type": "application/json"
+        "Content-Type": "application/json",
+        "HTTP-Referer": "https://discord.com",
+        "X-Title": "Discord AI Bot"
     }
 
     payload = {
-        "model": "meta-llama/llama-3-8b-instruct:free",
+        "model": "openrouter/free",
         "messages": [
             {
                 "role": "system",
                 "content": (
-                    "You are a smart Discord AI assistant."
+                    "You are a smart and friendly Discord AI assistant."
                 )
             },
             {
                 "role": "user",
                 "content": prompt
             }
-        ]
+        ],
+        "temperature": 0.7
     }
 
     try:
@@ -86,7 +56,8 @@ def ask_ai(prompt):
         response = requests.post(
             "https://openrouter.ai/api/v1/chat/completions",
             headers=headers,
-            json=payload
+            json=payload,
+            timeout=60
         )
 
         data = response.json()
@@ -94,38 +65,32 @@ def ask_ai(prompt):
         print(data)
 
         if "choices" not in data:
-            return f"API Error: {data}"
+            return f"API Error:\n{data}"
 
         return data["choices"][0]["message"]["content"]
 
     except Exception as e:
         return f"Error: {e}"
 
-# =========================================
-# Bot Ready Event
-# =========================================
+# =========================
+# BOT READY
+# =========================
 
 @client.event
 async def on_ready():
     print(f"Logged in as {client.user}")
 
-# =========================================
-# Message Event
-# =========================================
+# =========================
+# MESSAGE EVENT
+# =========================
 
 @client.event
 async def on_message(message):
 
-    # Ignore bot's own messages
     if message.author == client.user:
         return
 
-    # =====================================
     # PREFIX COMMAND
-    # Example:
-    # !ai hello
-    # =====================================
-
     if message.content.startswith("!ai"):
 
         user_prompt = message.content[3:].strip()
@@ -140,18 +105,12 @@ async def on_message(message):
 
             ai_response = ask_ai(user_prompt)
 
-            # Discord message length limit
             if len(ai_response) > 2000:
                 ai_response = ai_response[:1990] + "..."
 
             await message.channel.send(ai_response)
 
-    # =====================================
-    # BOT MENTION REPLY
-    # Example:
-    # @BotName hello
-    # =====================================
-
+    # MENTION REPLY
     elif client.user in message.mentions:
 
         user_prompt = message.content.replace(
@@ -171,8 +130,8 @@ async def on_message(message):
 
             await message.channel.send(ai_response)
 
-# =========================================
-# Run Bot
-# =========================================
+# =========================
+# RUN BOT
+# =========================
 
 client.run(DISCORD_BOT_TOKEN)
