@@ -2,7 +2,7 @@ import discord
 from discord.ext import commands
 import logging
 from config import settings
-from ai.ollama_client import OllamaEngine
+from ollama_client import OllamaEngine
 from memory.chroma_memory import JarvisMemory
 from tools.server_tools import ToolExecutor
 
