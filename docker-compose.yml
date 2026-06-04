@@ -1,0 +1,27 @@
+version: '3.8'
+
+services:
+  ollama:
+    image: ollama/ollama:latest
+    container_name: jarvis_ollama
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+    restart: unless-stopped # This makes it run 24/7 and start on boot
+
+  jarvis_bot:
+    build: .
+    container_name: jarvis_core
+    depends_on:
+      - ollama
+    environment:
+      - DISCORD_TOKEN=YOUR_DISCORD_TOKEN_HERE
+      - OLLAMA_HOST=http://ollama:11434
+    volumes:
+      - ./database:/app/database
+      - ./logs:/app/logs
+    restart: unless-stopped # This makes it run 24/7 and start on boot
+
+volumes:
+  ollama_data:
